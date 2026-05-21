@@ -1,0 +1,176 @@
+services:
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: trezzecloud-rabbitmq
+    hostname: rabbitmq
+    restart: unless-stopped
+
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-guest}
+
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+    networks:
+      - trezzecloud-network
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: trezzecloud-sqlserver
+    hostname: sqlserver
+    restart: unless-stopped
+
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: ${SQL_SA_PASSWORD:-Your_password123}
+
+    ports:
+      - "1433:1433"
+
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$SA_PASSWORD\" -Q \"SELECT 1\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+
+    networks:
+      - trezzecloud-network
+
+  users-api:
+    image: trezzecloud-users-api
+    container_name: trezzecloud-users-api
+    restart: unless-stopped
+
+    build:
+      context: ../TrezzeCloud.UsersAPI
+
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      sqlserver:
+        condition: service_healthy
+
+    ports:
+      - "8081:8080"
+
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+
+      ConnectionStrings__UsersDatabase: ${USERS_CONNECTION_STRING:-Server=sqlserver;Database=TrezzeCloudUsers;User Id=sa;Password=Your_password123;TrustServerCertificate=True}
+
+      RabbitMq__Host: ${RABBITMQ_HOST:-rabbitmq}
+      RabbitMq__Username: ${RABBITMQ_USERNAME:-guest}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD:-guest}
+
+      AdminUser__Password: ${USERS_ADMIN_PASSWORD:-Admin@123}
+      Jwt__Issuer: ${JWT_ISSUER:-TrezzeCloud}
+      Jwt__Audience: ${JWT_AUDIENCE:-TrezzeCloud}
+      Jwt__SecretKey: ${JWT_SECRET_KEY:-SUPER_SECRET_KEY_123456789_SUPER_SECRET_KEY}
+
+    networks:
+      - trezzecloud-network
+
+  catalog-api:
+    image: trezzecloud-catalog-api
+    container_name: trezzecloud-catalog-api
+    restart: unless-stopped
+
+    build:
+      context: ../TrezzeCloud.CatalogAPI
+
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      sqlserver:
+        condition: service_healthy
+
+    ports:
+      - "8082:8080"
+
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+
+      ConnectionStrings__CatalogDatabase: ${CATALOG_CONNECTION_STRING:-Server=sqlserver;Database=TrezzeCloudCatalog;User Id=sa;Password=Your_password123;TrustServerCertificate=True}
+
+      RabbitMq__Host: ${RABBITMQ_HOST:-rabbitmq}
+      RabbitMq__Username: ${RABBITMQ_USERNAME:-guest}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD:-guest}
+
+      Jwt__Issuer: ${JWT_ISSUER:-TrezzeCloud}
+      Jwt__Audience: ${JWT_AUDIENCE:-TrezzeCloud}
+      Jwt__SecretKey: ${JWT_SECRET_KEY:-SUPER_SECRET_KEY_123456789_SUPER_SECRET_KEY}
+
+    networks:
+      - trezzecloud-network
+
+  payments-api:
+    image: trezzecloud-payments-api
+    container_name: trezzecloud-payments-api
+    restart: unless-stopped
+
+    build:
+      context: ../TrezzeCloud.PaymentsAPI
+
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+    ports:
+      - "8083:8080"
+
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+
+      RabbitMq__Host: ${RABBITMQ_HOST:-rabbitmq}
+      RabbitMq__Username: ${RABBITMQ_USERNAME:-guest}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD:-guest}
+
+    networks:
+      - trezzecloud-network
+
+  notifications-api:
+    image: trezzecloud-notifications-api
+    container_name: trezzecloud-notifications-api
+    restart: unless-stopped
+
+    build:
+      context: ../TrezzeCloud.NotificationsAPI
+
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+    ports:
+      - "8084:8080"
+
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+
+      RabbitMq__Host: ${RABBITMQ_HOST:-rabbitmq}
+      RabbitMq__Username: ${RABBITMQ_USERNAME:-guest}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD:-guest}
+
+    networks:
+      - trezzecloud-network
+
+networks:
+  trezzecloud-network:
+
+volumes:
+  rabbitmq_data:
+  sqlserver_data:
