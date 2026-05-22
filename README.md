@@ -192,17 +192,3 @@ kubectl get pods
 kubectl get svc
 ```
 
----
-
-# Autor
-
-Projeto desenvolvido para o Tech Challenge FIAP.
-
-````
-
-
-
-
-
-
-
